@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Peer review + Borda voting result",
+  "type": "object",
+  "required": ["as_of", "borda", "survivors"],
+  "properties": {
+    "as_of": {"type": "string", "format": "date"},
+    "borda": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["method", "borda_points", "mean_review_score"],
+        "properties": {
+          "method": {"type": "string"},
+          "borda_points": {"type": "number"},
+          "mean_review_score": {"type": "number"},
+          "review_breakdown": {
+            "type": "object",
+            "properties": {
+              "risk_adj_return": {"type": "number"},
+              "diversification": {"type": "number"},
+              "robustness": {"type": "number"}
+            }
+          }
+        }
+      }
+    },
+    "survivors": {"type": "array", "items": {"type": "string"}},
+    "adversarial_challenger": {
+      "type": ["object", "null"],
+      "properties": {
+        "weights": {"type": "object"},
+        "won": {"type": "boolean"}
+      }
+    },
+    "filtered_out": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {"method": {"type": "string"}, "reason": {"type": "string"}}
+      }
+    }
+  }
+}

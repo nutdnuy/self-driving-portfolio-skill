@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Final recommended portfolio",
+  "type": "object",
+  "required": ["as_of", "weights", "metrics", "ensemble_method", "regime", "escalate_to_human"],
+  "properties": {
+    "as_of": {"type": "string", "format": "date"},
+    "regime": {"type": "string"},
+    "ensemble_method": {"type": "string"},
+    "weights": {
+      "type": "object",
+      "additionalProperties": {"type": "number"}
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "expected_return": {"type": "number"},
+        "volatility": {"type": "number"},
+        "sharpe": {"type": "number"},
+        "effective_n": {"type": "number"},
+        "max_weight": {"type": "number"}
+      }
+    },
+    "all_ensembles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {"type": "number"}
+      }
+    },
+    "dissenting_view": {
+      "type": ["object", "null"],
+      "properties": {
+        "method": {"type": "string"},
+        "weights": {"type": "object"},
+        "rationale": {"type": "string"}
+      }
+    },
+    "escalate_to_human": {"type": "boolean"},
+    "escalation_reason": {"type": "string"}
+  }
+}

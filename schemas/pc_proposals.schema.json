@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Portfolio-construction proposals",
+  "type": "object",
+  "required": ["as_of", "proposals"],
+  "properties": {
+    "as_of": {"type": "string", "format": "date"},
+    "proposals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["method", "weights", "metrics", "rationale", "feasible"],
+        "properties": {
+          "method": {"type": "string"},
+          "weights": {
+            "type": "object",
+            "additionalProperties": {"type": "number"}
+          },
+          "metrics": {
+            "type": "object",
+            "properties": {
+              "expected_return": {"type": "number"},
+              "volatility": {"type": "number"},
+              "sharpe": {"type": "number"},
+              "max_weight": {"type": "number"},
+              "effective_n": {"type": "number"},
+              "diversification_ratio": {"type": "number"}
+            }
+          },
+          "feasible": {"type": "boolean"},
+          "rationale": {"type": "string"}
+        }
+      }
+    }
+  }
+}
