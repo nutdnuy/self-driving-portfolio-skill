@@ -1,24 +1,39 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/nutdnuy/self-driving-portfolio-skill/schemas/cmas.schema.json",
   "title": "Capital Market Assumptions",
   "type": "object",
-  "required": ["as_of", "lookback_years", "regime", "cmas"],
+  "additionalProperties": false,
+  "required": ["as_of", "data_through", "lookback_years", "regime", "cmas"],
   "properties": {
     "as_of": {"type": "string", "format": "date"},
-    "lookback_years": {"type": "number"},
-    "regime": {"type": "string"},
+    "data_through": {"type": "string", "format": "date"},
+    "lookback_years": {"type": "number", "exclusiveMinimum": 0},
+    "regime": {
+      "type": "string",
+      "enum": ["expansion", "late_cycle", "recession", "recovery"]
+    },
     "cmas": {
       "type": "array",
+      "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["ticker", "expected_return", "volatility", "confidence"],
+        "additionalProperties": false,
+        "required": [
+          "ticker",
+          "expected_return",
+          "volatility",
+          "confidence",
+          "regime_tilt",
+          "memo"
+        ],
         "properties": {
-          "ticker": {"type": "string"},
+          "ticker": {"type": "string", "pattern": "^[A-Z0-9][A-Z0-9.^=_-]{0,19}$"},
           "expected_return": {"type": "number"},
-          "volatility": {"type": "number"},
+          "volatility": {"type": "number", "exclusiveMinimum": 0},
           "confidence": {"type": "number", "minimum": 0, "maximum": 1},
           "regime_tilt": {"type": "number"},
-          "memo": {"type": "string"}
+          "memo": {"type": "string", "minLength": 1}
         }
       }
     }

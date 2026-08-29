@@ -1,39 +1,72 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/nutdnuy/self-driving-portfolio-skill/schemas/final_portfolio.schema.json",
   "title": "Final recommended portfolio",
   "type": "object",
-  "required": ["as_of", "weights", "metrics", "ensemble_method", "regime", "escalate_to_human"],
+  "additionalProperties": false,
+  "required": [
+    "as_of",
+    "weights",
+    "metrics",
+    "all_ensembles",
+    "ensemble_method",
+    "regime",
+    "dissenting_view",
+    "escalate_to_human",
+    "escalation_reason"
+  ],
   "properties": {
     "as_of": {"type": "string", "format": "date"},
-    "regime": {"type": "string"},
-    "ensemble_method": {"type": "string"},
+    "regime": {
+      "type": "string",
+      "enum": ["expansion", "late_cycle", "recession", "recovery"]
+    },
+    "ensemble_method": {"type": "string", "minLength": 1},
     "weights": {
       "type": "object",
-      "additionalProperties": {"type": "number"}
+      "minProperties": 1,
+      "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
     },
     "metrics": {
       "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_return",
+        "volatility",
+        "sharpe",
+        "effective_n",
+        "max_weight",
+        "diversification_ratio"
+      ],
       "properties": {
         "expected_return": {"type": "number"},
-        "volatility": {"type": "number"},
+        "volatility": {"type": "number", "minimum": 0},
         "sharpe": {"type": "number"},
-        "effective_n": {"type": "number"},
-        "max_weight": {"type": "number"}
+        "effective_n": {"type": "number", "minimum": 0},
+        "max_weight": {"type": "number", "minimum": 0, "maximum": 1},
+        "diversification_ratio": {"type": "number", "minimum": 0}
       }
     },
     "all_ensembles": {
       "type": "object",
+      "minProperties": 1,
       "additionalProperties": {
         "type": "object",
-        "additionalProperties": {"type": "number"}
+        "minProperties": 1,
+        "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
       }
     },
     "dissenting_view": {
       "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["method", "weights", "rationale"],
       "properties": {
-        "method": {"type": "string"},
-        "weights": {"type": "object"},
-        "rationale": {"type": "string"}
+        "method": {"type": "string", "minLength": 1},
+        "weights": {
+          "type": "object",
+          "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
+        },
+        "rationale": {"type": "string", "minLength": 1}
       }
     },
     "escalate_to_human": {"type": "boolean"},

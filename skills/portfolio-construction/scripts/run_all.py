@@ -6,29 +6,48 @@ import json
 import sys
 from pathlib import Path
 
-import numpy as np
-
 sys.path.insert(0, str(Path(__file__).parent))
 from methods import METHODS  # noqa: E402
-from utils import (align_inputs, is_feasible, parse_ips, portfolio_metrics,  # noqa: E402
-                   project_to_box)
-
+from utils import (  # noqa: E402
+    align_inputs,
+    is_feasible,
+    parse_ips,
+    portfolio_metrics,
+    project_to_box,
+)
 
 RATIONALE_TEMPLATE = {
     "equal_weight": "1/N baseline; ignores all CMAs; high effective N by construction.",
-    "inverse_vol": "Inverse-volatility weighting; reduces concentration in high-vol assets without using expected returns.",
-    "min_variance": "Variance-minimising portfolio; ignores expected returns; tends to favour low-vol defensives.",
-    "max_sharpe": "Tangency portfolio on the long-only frontier; concentrated in the highest-Sharpe assets given CMAs.",
+    "inverse_vol": (
+        "Inverse-volatility weighting; reduces concentration in high-vol assets "
+        "without using expected returns."
+    ),
+    "min_variance": (
+        "Variance-minimising portfolio; ignores expected returns; tends to favour "
+        "low-vol defensives."
+    ),
+    "max_sharpe": (
+        "Tangency portfolio on the long-only frontier; concentrated in the "
+        "highest-Sharpe assets given CMAs."
+    ),
     "risk_parity": "Equal-risk-contribution; each asset contributes the same ex-ante volatility.",
-    "hrp": "Lopez de Prado HRP; clusters assets and bisects risk recursively, robust to estimation error in covariance.",
+    "hrp": (
+        "Lopez de Prado HRP; clusters assets and bisects risk recursively, "
+        "robust to estimation error in covariance."
+    ),
     "max_diversification": "Maximises (Σ wᵢσᵢ)/σ_p; rewards low-correlation combinations.",
-    "black_litterman": "BL combining market-implied prior with absolute CMA views weighted by confidence.",
+    "black_litterman": (
+        "BL combining market-implied prior with absolute CMA views weighted by confidence."
+    ),
     "mvo_constrained": "MVO with IPS box constraints and risk-aversion λ=5.0.",
-    "tpa": "Total Portfolio Allocation — risk parity tilted by regime (growth-on in expansion/recovery, off in late-cycle/recession).",
+    "tpa": (
+        "Total Portfolio Allocation — risk parity tilted by regime "
+        "(growth-on in expansion/recovery, off in late-cycle/recession)."
+    ),
 }
 
 
-def run(cmas_path: str, cov_path: str, ips_path: str, out_path: str,
+def run(cmas_path: str, cov_path: str, ips_path: str, out_path: str | None,
         regime: str = "expansion") -> dict:
     cmas = json.loads(Path(cmas_path).read_text())
     cov = json.loads(Path(cov_path).read_text())
@@ -44,6 +63,8 @@ def run(cmas_path: str, cov_path: str, ips_path: str, out_path: str,
         except Exception as e:
             proposals.append({
                 "method": name,
+                "status": "failed",
+                "error": f"{type(e).__name__}: {e}"[:500],
                 "weights": {t: 0.0 for t in data["tickers"]},
                 "metrics": {},
                 "feasible": False,
@@ -56,7 +77,8 @@ def run(cmas_path: str, cov_path: str, ips_path: str, out_path: str,
         metrics = portfolio_metrics(proj, data["mu"], data["sigma"], data["cov"])
         proposals.append({
             "method": name,
-            "weights": {t: float(w) for t, w in zip(data["tickers"], proj)},
+            "status": "ok",
+            "weights": {t: float(w) for t, w in zip(data["tickers"], proj, strict=True)},
             "metrics": metrics,
             "feasible": bool(feas),
             "rationale": RATIONALE_TEMPLATE[name] +
@@ -65,8 +87,9 @@ def run(cmas_path: str, cov_path: str, ips_path: str, out_path: str,
         })
 
     out = {"as_of": cmas["as_of"], "proposals": proposals}
-    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-    Path(out_path).write_text(json.dumps(out, indent=2))
+    if out_path is not None:
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(out_path).write_text(json.dumps(out, indent=2))
     return out
 
 

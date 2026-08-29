@@ -1,6 +1,6 @@
 ---
 name: macro-regime
-description: Classify the current US macro regime into expansion / late_cycle / recession / recovery using a four-dimensional weighted scoring framework (growth, inflation, monetary policy, financial conditions). Use when an upstream agent needs a regime label and soft regime-score vector to condition CMAs, portfolio-construction tilts, or ensemble selection.
+description: This skill should be used when the user asks to "classify the macro regime", "score expansion versus recession", or create a dated regime signal for capital market assumptions and SAA research.
 ---
 
 # macro-regime
@@ -34,14 +34,18 @@ regime label; the full vector is exposed downstream.
 
 ## Scripts
 
-- `scripts/fetch_macro.py` — pulls FRED data via the public CSV endpoint
-  (no API key needed; FRED_API_KEY is honoured if set).
+- `scripts/fetch_macro.py` — pull an authenticated FRED vintage when
+  `FRED_API_KEY` is set; otherwise apply the observation-date cutoff to
+  latest-revised public CSV history and disclose that policy in the artifact.
 - `scripts/classify_regime.py` — runs the scoring, writes `regime.json`.
 
 ## Output contract
 
 `schemas/regime.schema.json`. The `notes` field is filled by the LLM in
 agent mode; a templated version is filled when run from CLI.
+
+Run through `pipeline/orchestrator.py` for schema gating and governed output.
+Treat direct CLI output as an isolated, ungoverned stage result.
 
 ## CLI
 

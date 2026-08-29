@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "self-driving-portfolio-skill"
+version = "0.2.0"
+description = "Governed Claude Code and Codex skill for agentic Strategic Asset Allocation research."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "nutdnuy" }]
+dependencies = [
+  "numpy>=1.24,<3.0",
+  "pandas>=2.0,<3.0",
+  "scipy>=1.10,<2.0",
+  "yfinance>=0.2.40,<2.0",
+  "requests>=2.31,<3.0",
+  "jsonschema[format-nongpl]>=4.21,<5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9.0.3,<10.0",
+  "pyyaml>=6.0,<7.0",
+  "ruff>=0.12,<1.0",
+]
+
+[tool.setuptools]
+packages = ["pipeline"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+exclude = [".cache", "outputs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["E402"]

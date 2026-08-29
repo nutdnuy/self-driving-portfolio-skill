@@ -1,6 +1,6 @@
 ---
 name: covariance
-description: Estimate the asset-return covariance matrix using sample, EWMA, or Ledoit-Wolf shrinkage estimators. Use when an upstream agent needs an annualised covariance matrix to feed portfolio-construction methods.
+description: This skill should be used when the user asks to "estimate a covariance matrix", "run Ledoit-Wolf shrinkage", "build an EWMA covariance", or validate PSD risk inputs for portfolio construction.
 ---
 
 # covariance
@@ -17,11 +17,20 @@ Covariance estimation for the SAA pipeline.
 
 All matrices are returned **annualised** (×252 for daily inputs).
 
+Require at least 60 complete aligned return rows. Symmetrise each estimate and
+clip non-positive eigenvalues to a scale-aware floor. Record the original
+minimum eigenvalue, repair flag, condition number, aligned sample size, and
+missing-data fraction. Treat repair as numerical stabilization, not economic
+validation.
+
 ## CLI
 
 ```bash
 python skills/covariance/scripts/build_cov.py \
        --tickers SPY,EFA,EEM,IEF,LQD,TIP,GLD,VNQ,BIL \
        --method ledoit_wolf \
+       --as-of 2026-05-08 \
        --out outputs/demo01/covariance.json
 ```
+
+Run through `pipeline/orchestrator.py` for schema gating and governed output.

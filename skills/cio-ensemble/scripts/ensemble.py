@@ -9,13 +9,12 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parents[2] / "portfolio-construction" / "scripts"))
-from utils import (align_inputs, is_feasible, parse_ips, portfolio_metrics,  # noqa: E402
-                   project_to_box)
+from utils import align_inputs, parse_ips, portfolio_metrics, project_to_box  # noqa: E402
 
 
 def _stack(survivors: list[dict], tickers: list[str]) -> np.ndarray:
     """Return matrix W (n_methods × n_tickers) of survivor weights."""
-    return np.array([[s["weights"].get(t, 0.0) for t in tickers] for s in survivors])
+    return np.array([[s["weights"][t] for t in tickers] for s in survivors])
 
 
 def _normalise(w: np.ndarray) -> np.ndarray:
@@ -114,7 +113,7 @@ def _regime_fit(method: str, regime: str) -> float:
 
 def ensemble(cmas_path: str, cov_path: str, ips_path: str,
              proposals_path: str, peer_review_path: str,
-             regime_path: str, out_path: str, memo_path: str) -> dict:
+             regime_path: str, out_path: str | None, memo_path: str | None) -> dict:
 
     cmas = json.loads(Path(cmas_path).read_text())
     cov = json.loads(Path(cov_path).read_text())
@@ -129,7 +128,12 @@ def ensemble(cmas_path: str, cov_path: str, ips_path: str,
     # Pull survivor proposals
     surv_names = review["survivors"]
     proposals_by_method = {p["method"]: p for p in proposals_obj["proposals"]}
-    survivors = [proposals_by_method[m] for m in surv_names if m in proposals_by_method]
+    missing_survivors = set(surv_names).difference(proposals_by_method)
+    if missing_survivors:
+        raise RuntimeError(
+            f"Peer-review survivors are absent from proposals: {sorted(missing_survivors)}"
+        )
+    survivors = [proposals_by_method[method] for method in surv_names]
     if not survivors:
         raise RuntimeError("No survivors after peer review — pipeline must escalate.")
 
@@ -148,7 +152,7 @@ def ensemble(cmas_path: str, cov_path: str, ips_path: str,
                sharpes=sharpes, regime_fits=regime_fits)
         # Project to IPS box
         w_proj = project_to_box(w, data["min_w"], data["max_w"])
-        all_ensembles[name] = {t: float(x) for t, x in zip(tickers, w_proj)}
+        all_ensembles[name] = {t: float(x) for t, x in zip(tickers, w_proj, strict=True)}
 
     # Selection rule
     if regime_obj.get("top1_confidence_low", False):
@@ -176,20 +180,23 @@ def ensemble(cmas_path: str, cov_path: str, ips_path: str,
         dissenting = None
 
     # Escalation flags
-    vol_cap = 0.18
+    vol_cap = ips["vol_cap"]
+    min_feasible = ips["min_feasible_proposals"]
     feasible_count = sum(1 for p in proposals_obj["proposals"] if p.get("feasible"))
     adv = review.get("adversarial_challenger") or {}
     escalate = (
         metrics["volatility"] > vol_cap - 0.005
-        or feasible_count < 5
+        or feasible_count < min_feasible
         or adv.get("won", False)
         or regime_obj.get("top1_confidence_low", False)
     )
     reasons = []
     if metrics["volatility"] > vol_cap - 0.005:
         reasons.append("recommended vol within 50bps of IPS hard cap")
-    if feasible_count < 5:
-        reasons.append(f"only {feasible_count} feasible PC proposals (<5)")
+    if feasible_count < min_feasible:
+        reasons.append(
+            f"only {feasible_count} feasible PC proposals (<{min_feasible})"
+        )
     if adv.get("won", False):
         reasons.append("adversarial diversifier won")
     if regime_obj.get("top1_confidence_low", False):
@@ -199,7 +206,7 @@ def ensemble(cmas_path: str, cov_path: str, ips_path: str,
         "as_of": cmas["as_of"],
         "regime": regime,
         "ensemble_method": chosen,
-        "weights": {t: float(x) for t, x in zip(tickers, weights)},
+        "weights": {t: float(x) for t, x in zip(tickers, weights, strict=True)},
         "metrics": metrics,
         "all_ensembles": all_ensembles,
         "dissenting_view": dissenting,
@@ -207,20 +214,29 @@ def ensemble(cmas_path: str, cov_path: str, ips_path: str,
         "escalation_reason": "; ".join(reasons),
     }
 
-    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-    Path(out_path).write_text(json.dumps(out, indent=2))
-
-    _write_memo(out, regime_obj, cmas, proposals_obj, review, memo_path)
+    if out_path is not None:
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(out_path).write_text(json.dumps(out, indent=2), encoding="utf-8")
+    if memo_path is not None:
+        Path(memo_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(memo_path).write_text(
+            render_board_memo(out, regime_obj, cmas, proposals_obj, review),
+            encoding="utf-8",
+        )
     return out
 
 
-def _write_memo(final: dict, regime_obj: dict, cmas: dict,
-                proposals_obj: dict, review: dict, memo_path: str) -> None:
+def render_board_memo(final: dict, regime_obj: dict, cmas: dict,
+                      proposals_obj: dict, review: dict) -> str:
+    """Render the human-review memo without mutating the filesystem."""
     lines = []
-    lines.append(f"# Board Memo — Recommended Policy Portfolio")
+    lines.append("# Board Memo — Recommended Policy Portfolio")
     lines.append("")
     lines.append(f"**As of:** {final['as_of']}  ")
-    lines.append(f"**Regime:** {final['regime']} (top-1 conf {regime_obj['top1_confidence']:.2f})  ")
+    lines.append(
+        f"**Regime:** {final['regime']} "
+        f"(top-1 conf {regime_obj['top1_confidence']:.2f})  "
+    )
     lines.append(f"**Ensemble method chosen:** `{final['ensemble_method']}`  ")
     lines.append("")
     lines.append("## 1. Regime call")
@@ -277,11 +293,11 @@ def _write_memo(final: dict, regime_obj: dict, cmas: dict,
         lines.append("## 6. Escalation")
         lines.append("")
         lines.append("No escalation flags fired. Recommendation is within IPS bounds and ")
-        lines.append("supported by ≥5 feasible PC proposals.")
+        lines.append("supported by the IPS-required minimum feasible proposal count.")
         lines.append("")
     lines.append("---")
     lines.append("Generated by the agentic SAA pipeline (Ang/Azimbayev/Kim 2026).")
-    Path(memo_path).write_text("\n".join(lines))
+    return "\n".join(lines) + "\n"
 
 
 if __name__ == "__main__":

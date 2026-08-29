@@ -12,14 +12,38 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent))
 from fetch_prices import fetch_prices  # noqa: E402
 
-
 # Asset bucket → regime tilt (annualised, additive to historical mean)
 TILTS = {
-    "equity":     {"expansion": 0.015, "late_cycle": -0.005, "recession": -0.030, "recovery":  0.020},
-    "treasury":   {"expansion": -0.005, "late_cycle": -0.005, "recession":  0.015, "recovery":  0.005},
-    "credit":     {"expansion":  0.000, "late_cycle": -0.010, "recession": -0.015, "recovery":  0.010},
-    "infl_link":  {"expansion":  0.005, "late_cycle":  0.015, "recession":  0.000, "recovery": -0.005},
-    "cash":       {"expansion":  0.000, "late_cycle":  0.000, "recession":  0.005, "recovery":  0.000},
+    "equity": {
+        "expansion": 0.015,
+        "late_cycle": -0.005,
+        "recession": -0.030,
+        "recovery": 0.020,
+    },
+    "treasury": {
+        "expansion": -0.005,
+        "late_cycle": -0.005,
+        "recession": 0.015,
+        "recovery": 0.005,
+    },
+    "credit": {
+        "expansion": 0.000,
+        "late_cycle": -0.010,
+        "recession": -0.015,
+        "recovery": 0.010,
+    },
+    "infl_link": {
+        "expansion": 0.005,
+        "late_cycle": 0.015,
+        "recession": 0.000,
+        "recovery": -0.005,
+    },
+    "cash": {
+        "expansion": 0.000,
+        "late_cycle": 0.000,
+        "recession": 0.005,
+        "recovery": 0.000,
+    },
 }
 
 BUCKET_MAP = {
@@ -43,25 +67,44 @@ def build_cmas(
     tickers: list[str],
     regime_obj: dict,
     lookback_years: float = 10.0,
+    as_of: str | None = None,
+    prices: pd.DataFrame | None = None,
 ) -> dict:
-    prices = fetch_prices(tickers, years=lookback_years)
-    available = [t for t in tickers if t in prices.columns]
-    mu, sigma = historical_stats(prices[available])
+    cutoff = as_of or regime_obj["as_of"]
+    price_frame = (
+        prices.copy()
+        if prices is not None
+        else fetch_prices(tickers, years=lookback_years, as_of=cutoff)
+    )
+    if list(price_frame.columns) != tickers:
+        raise RuntimeError("Price columns do not exactly match the IPS ticker order")
+    cutoff_timestamp = pd.Timestamp(cutoff).normalize()
+    price_frame.index = pd.to_datetime(price_frame.index, utc=True).tz_convert(None)
+    if (price_frame.index > cutoff_timestamp).any():
+        raise ValueError("Price input contains observations after as_of")
+    mu, sigma = historical_stats(price_frame[tickers])
 
     regime = regime_obj["regime"]
     top1 = regime_obj.get("top1_confidence", 1.0)
 
     cmas = []
-    for t in available:
+    for t in tickers:
         bucket = BUCKET_MAP.get(t, "equity")
         tilt = TILTS[bucket][regime] * top1  # scale tilt by regime confidence
         exp_ret = float(mu[t]) + tilt
         vol = float(sigma[t])
-        n_obs = int(prices[t].dropna().shape[0])
+        n_obs = int(price_frame[t].dropna().shape[0])
+        n_returns = int(
+            np.log(price_frame[t] / price_frame[t].shift(1)).dropna().shape[0]
+        )
+        if n_returns < 60 or not np.isfinite(mu[t]) or not np.isfinite(sigma[t]):
+            raise RuntimeError(
+                f"Insufficient usable history for {t}: {n_returns} returns (minimum 60)"
+            )
 
         sample_factor = float(np.clip(n_obs / 2520.0, 0.0, 1.0))  # 10y of dailies
         # vol stability: 1 - normalised dispersion of rolling 1y vol
-        rets = np.log(prices[t] / prices[t].shift(1)).dropna()
+        rets = np.log(price_frame[t] / price_frame[t].shift(1)).dropna()
         rolling_vol = rets.rolling(252).std() * np.sqrt(252.0)
         if len(rolling_vol.dropna()) > 0 and vol > 0:
             disp = float(np.clip(rolling_vol.std() / vol, 0.0, 1.0))
@@ -87,7 +130,8 @@ def build_cmas(
         })
 
     return {
-        "as_of": regime_obj["as_of"],
+        "as_of": str(cutoff),
+        "data_through": str(price_frame.index.max().date()),
         "lookback_years": lookback_years,
         "regime": regime,
         "cmas": cmas,
@@ -99,11 +143,14 @@ if __name__ == "__main__":
     parser.add_argument("--regime", required=True, help="path to regime.json")
     parser.add_argument("--tickers", required=True)
     parser.add_argument("--lookback-years", type=float, default=10.0)
+    parser.add_argument("--as-of", default=None)
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
 
     regime_obj = json.loads(Path(args.regime).read_text())
-    out = build_cmas(args.tickers.split(","), regime_obj, args.lookback_years)
+    out = build_cmas(
+        args.tickers.split(","), regime_obj, args.lookback_years, args.as_of
+    )
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(out, indent=2))
     print(json.dumps(out, indent=2))

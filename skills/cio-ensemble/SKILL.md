@@ -1,6 +1,6 @@
 ---
 name: cio-ensemble
-description: Combine surviving portfolio proposals into one recommended policy portfolio using seven ensemble methods, pick the regime-appropriate combiner, and produce a board memo for human review. Use as the final stage of the SAA pipeline.
+description: This skill should be used when the user asks to "combine portfolio proposals", "build a CIO ensemble", "select an SAA recommendation", or "write a portfolio board memo" from reviewed candidates.
 ---
 
 # cio-ensemble
@@ -41,6 +41,9 @@ If `top1_confidence_low=true`, the override fires regardless of label.
 
 `escalate_to_human=true` if any of:
 - Recommended vol within 50bps of IPS hard cap.
-- Fewer than 5 IPS-feasible proposals survived peer review.
+- Fewer than the IPS-defined minimum feasible proposal count survived review.
 - Adversarial diversifier won the head-to-head.
 - Top-1 regime confidence below 0.4.
+
+Run through `pipeline/orchestrator.py` to commit the final JSON and board memo
+atomically, then verify the complete run with `pipeline/verify.py`.

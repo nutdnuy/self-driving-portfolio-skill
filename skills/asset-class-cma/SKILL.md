@@ -1,6 +1,6 @@
 ---
 name: asset-class-cma
-description: Build Capital Market Assumptions (expected return, volatility, confidence) for one or more tickers, conditioned on the macro regime. Use when an upstream agent needs forward-looking CMAs to feed a covariance estimator and portfolio-construction methods.
+description: This skill should be used when the user asks to "build capital market assumptions", "estimate asset-class returns", or create regime-conditioned return, volatility, and confidence inputs for portfolio construction.
 ---
 
 # asset-class-cma
@@ -10,7 +10,8 @@ ticker.
 
 ## Methodology
 
-1. Pull adjusted close prices via yfinance (default 10y daily lookback).
+1. Pull adjusted close prices via yfinance (default 10y daily lookback) and
+   reject every row after the shared as-of date.
 2. Compute geometric mean return and annualised volatility from log-returns.
 3. Apply a regime-conditional tilt to expected return:
 
@@ -27,11 +28,17 @@ ticker.
 4. Confidence (0–1) = sample-size factor × vol-stability factor
    × regime-confidence factor.
 
+Stop when any IPS ticker is unavailable or has fewer than 60 usable returns.
+Never shrink the mandate universe silently.
+
 ## CLI
 
 ```bash
 python skills/asset-class-cma/scripts/build_cma.py \
        --regime outputs/demo01/regime.json \
        --tickers SPY,EFA,EEM,IEF,LQD,TIP,GLD,VNQ,BIL \
+       --as-of 2026-05-08 \
        --out outputs/demo01/cmas.json
 ```
+
+Run through `pipeline/orchestrator.py` for schema gating and governed output.

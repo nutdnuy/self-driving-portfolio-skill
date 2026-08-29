@@ -1,0 +1,23 @@
+{
+  "name": "self-driving-portfolio-skill",
+  "description": "Marketplace for the Self-Driving Portfolio plugin.",
+  "owner": {
+    "name": "nutdnuy",
+    "url": "https://github.com/nutdnuy"
+  },
+  "metadata": {
+    "description": "Claude-compatible plugin for governed Strategic Asset Allocation research."
+  },
+  "plugins": [
+    {
+      "name": "self-driving-portfolio-skill",
+      "description": "Build and verify an IPS-governed policy portfolio with deterministic methods and fail-closed contracts.",
+      "version": "0.2.0",
+      "source": "./",
+      "author": {
+        "name": "nutdnuy",
+        "url": "https://github.com/nutdnuy"
+      }
+    }
+  ]
+}

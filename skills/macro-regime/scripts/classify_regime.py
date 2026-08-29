@@ -17,7 +17,6 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent))
 from fetch_macro import fetch_indicators  # noqa: E402
 
-
 REGIME_WEIGHTS = {
     # rows: regime; cols: (growth, inflation, monetary, fci)
     "expansion":  ( 1.0, -0.5, -0.5, -1.0),
@@ -84,11 +83,23 @@ def score_regimes(indicators: dict[str, float]) -> dict[str, float]:
     arr = arr - arr.max()
     exp = np.exp(arr)
     probs = exp / exp.sum()
-    return {k: float(v) for k, v in zip(raw.keys(), probs)}
+    return {k: float(v) for k, v in zip(raw.keys(), probs, strict=True)}
 
 
-def classify(as_of: str | date | None = None) -> dict:
-    df = fetch_indicators(as_of)
+def classify(
+    as_of: str | date | None = None,
+    indicators_df: pd.DataFrame | None = None,
+) -> dict:
+    df = indicators_df.copy() if indicators_df is not None else fetch_indicators(as_of)
+    cutoff = pd.Timestamp(as_of or df.attrs.get("requested_as_of", date.today())).normalize()
+    if cutoff.tzinfo is not None:
+        cutoff = cutoff.tz_localize(None)
+    df.index = pd.to_datetime(df.index, utc=True).tz_convert(None)
+    if (df.index > cutoff).any():
+        raise ValueError("Macro input contains observations after as_of")
+    required = {"INDPRO", "CPIAUCSL", "DFF", "T10Y3M", "NFCI"}
+    if not required.issubset(df.columns):
+        raise ValueError(f"Macro input is missing required columns: {sorted(required - set(df))}")
     if df.empty:
         raise RuntimeError("FRED fetch returned no data — check connectivity.")
     indicators = build_indicator_vector(df)
@@ -105,7 +116,9 @@ def classify(as_of: str | date | None = None) -> dict:
     )
 
     return {
-        "as_of": str(as_of or df.index[-1].date()),
+        "as_of": cutoff.date().isoformat(),
+        "data_through": str(df.index[-1].date()),
+        "vintage_policy": df.attrs.get("vintage_policy", "latest_revision_cutoff"),
         "regime": regime,
         "scores": scores,
         "top1_confidence": top1,

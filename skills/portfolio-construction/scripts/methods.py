@@ -10,7 +10,7 @@ import numpy as np
 from scipy.cluster.hierarchy import linkage
 from scipy.optimize import minimize
 from scipy.spatial.distance import squareform
-
+from utils import RISK_FREE_RATE
 
 # --------------------------------------------------------------------------
 # Heuristics
@@ -30,12 +30,37 @@ def inverse_vol(data: dict) -> np.ndarray:
 # Optimisation-based
 # --------------------------------------------------------------------------
 
+def _feasible_start(min_w: np.ndarray, max_w: np.ndarray) -> np.ndarray:
+    """Construct a deterministic point inside a feasible bounded simplex."""
+    minimum = np.asarray(min_w, dtype=float)
+    maximum = np.asarray(max_w, dtype=float)
+    remaining = 1.0 - float(minimum.sum())
+    capacity = maximum - minimum
+    if remaining < -1e-10 or remaining > float(capacity.sum()) + 1e-10:
+        raise ValueError("Cannot initialize optimizer from infeasible bounds")
+    if remaining <= 1e-12:
+        return minimum.copy()
+    capacity_sum = float(capacity.sum())
+    if capacity_sum <= 0:
+        raise ValueError("Cannot initialize optimizer without available capacity")
+    return minimum + remaining * capacity / capacity_sum
+
+
+def _require_optimizer_result(result, method: str) -> np.ndarray:
+    """Reject solver failures instead of disguising a fallback as a proposal."""
+    if not result.success:
+        raise RuntimeError(f"{method} optimizer failed: {result.message}")
+    weights = np.asarray(result.x, dtype=float)
+    if not np.isfinite(weights).all():
+        raise RuntimeError(f"{method} optimizer returned non-finite weights")
+    return weights
+
+
 def _solve_qp(cov: np.ndarray, mu: np.ndarray | None,
               min_w: np.ndarray, max_w: np.ndarray,
               risk_aversion: float | None = None) -> np.ndarray:
     """Long-only sum-to-one MVO solver via SLSQP."""
-    n = cov.shape[0]
-    bounds = [(float(lo), float(hi)) for lo, hi in zip(min_w, max_w)]
+    bounds = [(float(lo), float(hi)) for lo, hi in zip(min_w, max_w, strict=True)]
     cons = [{"type": "eq", "fun": lambda w: w.sum() - 1.0}]
 
     def obj(w):
@@ -44,10 +69,10 @@ def _solve_qp(cov: np.ndarray, mu: np.ndarray | None,
             return risk
         return -(w @ mu) + risk_aversion * risk
 
-    x0 = np.ones(n) / n
+    x0 = _feasible_start(min_w, max_w)
     res = minimize(obj, x0, method="SLSQP", bounds=bounds,
                    constraints=cons, options={"maxiter": 200, "ftol": 1e-9})
-    return res.x if res.success else x0
+    return _require_optimizer_result(res, "mean-variance")
 
 
 def min_variance(data: dict) -> np.ndarray:
@@ -55,20 +80,19 @@ def min_variance(data: dict) -> np.ndarray:
 
 
 def max_sharpe(data: dict) -> np.ndarray:
-    n = data["n"]
-    bounds = [(float(lo), float(hi)) for lo, hi in zip(data["min_w"], data["max_w"])]
+    bounds = [(float(lo), float(hi)) for lo, hi in zip(data["min_w"], data["max_w"], strict=True)]
     cons = [{"type": "eq", "fun": lambda w: w.sum() - 1.0}]
-    rf = 0.04
+    rf = RISK_FREE_RATE
 
     def neg_sharpe(w):
         ret = w @ data["mu"] - rf
         vol = np.sqrt(max(w @ data["cov"] @ w, 1e-12))
         return -ret / vol
 
-    x0 = np.ones(n) / n
+    x0 = _feasible_start(data["min_w"], data["max_w"])
     res = minimize(neg_sharpe, x0, method="SLSQP", bounds=bounds,
                    constraints=cons, options={"maxiter": 300, "ftol": 1e-9})
-    return res.x if res.success else x0
+    return _require_optimizer_result(res, "max-sharpe")
 
 
 def mvo_constrained(data: dict, risk_aversion: float = 5.0) -> np.ndarray:
@@ -77,8 +101,7 @@ def mvo_constrained(data: dict, risk_aversion: float = 5.0) -> np.ndarray:
 
 
 def max_diversification(data: dict) -> np.ndarray:
-    n = data["n"]
-    bounds = [(float(lo), float(hi)) for lo, hi in zip(data["min_w"], data["max_w"])]
+    bounds = [(float(lo), float(hi)) for lo, hi in zip(data["min_w"], data["max_w"], strict=True)]
     cons = [{"type": "eq", "fun": lambda w: w.sum() - 1.0}]
 
     def neg_div(w):
@@ -86,10 +109,10 @@ def max_diversification(data: dict) -> np.ndarray:
         wsig = w @ data["sigma"]
         return -wsig / vol
 
-    x0 = inverse_vol(data)
+    x0 = _feasible_start(data["min_w"], data["max_w"])
     res = minimize(neg_div, x0, method="SLSQP", bounds=bounds,
                    constraints=cons, options={"maxiter": 300, "ftol": 1e-9})
-    return res.x if res.success else x0
+    return _require_optimizer_result(res, "max-diversification")
 
 
 # --------------------------------------------------------------------------
@@ -102,16 +125,20 @@ def risk_parity(data: dict) -> np.ndarray:
     n = data["n"]
     w = np.ones(n) / n
     target = 1.0 / n
+    converged = False
     for _ in range(500):
         port_vol = float(np.sqrt(max(w @ cov @ w, 1e-12)))
         mrc = cov @ w / port_vol  # marginal risk contribution
         rc = w * mrc / port_vol   # risk contribution shares
         if np.max(np.abs(rc - target)) < 1e-7:
+            converged = True
             break
         # multiplicative update
         w = w * (target / np.maximum(rc, 1e-12)) ** 0.5
         w = np.maximum(w, 1e-8)
         w = w / w.sum()
+    if not converged:
+        raise RuntimeError("risk-parity iteration failed to converge")
     return w
 
 

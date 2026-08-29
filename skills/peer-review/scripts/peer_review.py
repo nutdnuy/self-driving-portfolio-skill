@@ -3,23 +3,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parents[2] / "portfolio-construction" / "scripts"))
-from utils import parse_ips  # noqa: E402
-
-
-def _parse_vol_cap(ips_path: str) -> float:
-    """Pull the IPS 'Annualised volatility (hard cap)' value."""
-    text = Path(ips_path).read_text()
-    m = re.search(r"hard cap.*?\|\s*(\d+(?:\.\d+)?)\s*%", text)
-    if m:
-        return float(m.group(1)) / 100.0
-    return 0.18
+from utils import parse_ips, project_to_box  # noqa: E402
 
 
 def _score_proposal(p: dict) -> dict:
@@ -45,37 +35,56 @@ def _score_proposal(p: dict) -> dict:
 
 
 def _borda(scores: list[float]) -> list[float]:
-    """Convert raw scores to Borda points (highest gets n-1)."""
+    """Convert raw scores to tie-aware Borda points (highest gets n-1)."""
     n = len(scores)
-    order = np.argsort(-np.array(scores))
+    values = np.asarray(scores, dtype=float)
+    order = np.argsort(-values, kind="stable")
     points = np.zeros(n)
-    for rank, idx in enumerate(order):
-        points[idx] = n - 1 - rank
+    rank = 0
+    while rank < n:
+        end = rank + 1
+        while end < n and values[order[end]] == values[order[rank]]:
+            end += 1
+        tied_points = [n - 1 - position for position in range(rank, end)]
+        points[order[rank:end]] = float(np.mean(tied_points))
+        rank = end
     return points.tolist()
 
 
-def _adversarial_challenger(proposals: list[dict], tickers: list[str]) -> dict:
-    """Build an equal-weight challenger across all available IPS tickers.
+def _adversarial_challenger(ips: dict) -> dict:
+    """Build an IPS-feasible equal-weight challenger.
 
     A simple but effective adversarial baseline: maximally diversified."""
-    n = len(tickers)
-    w = {t: 1.0 / n for t in tickers}
+    tickers = ips["tickers"]
+    raw = np.full(len(tickers), 1.0 / len(tickers))
+    projected = project_to_box(raw, ips["min_w"], ips["max_w"])
+    weights = {
+        ticker: float(weight)
+        for ticker, weight in zip(tickers, projected, strict=True)
+    }
     return {
         "method": "adversarial_equal_weight",
-        "weights": w,
+        "weights": weights,
     }
 
 
 def review(proposals_path: str, ips_path: str, top_k: int = 5,
            vol_cap: float | None = None) -> dict:
+    if top_k <= 0:
+        raise ValueError("top_k must be positive")
     obj = json.loads(Path(proposals_path).read_text())
     ips = parse_ips(ips_path)
     if vol_cap is None:
-        vol_cap = _parse_vol_cap(ips_path)
+        vol_cap = ips["vol_cap"]
+    if vol_cap <= 0:
+        raise ValueError("vol_cap must be positive")
 
     surviving = []
     filtered_out = []
     for p in obj["proposals"]:
+        if p.get("status") != "ok":
+            filtered_out.append({"method": p["method"], "reason": "method failed"})
+            continue
         if not p.get("feasible", False):
             filtered_out.append({"method": p["method"],
                                  "reason": "infeasible (IPS box / sum)"})
@@ -110,7 +119,7 @@ def review(proposals_path: str, ips_path: str, top_k: int = 5,
     )
 
     breakdown = []
-    for p, r, b in zip(surviving, rubrics, borda):
+    for p, r, b in zip(surviving, rubrics, borda, strict=True):
         breakdown.append({
             "method": p["method"],
             "borda_points": float(b),
@@ -125,11 +134,12 @@ def review(proposals_path: str, ips_path: str, top_k: int = 5,
     winner_p = next(x for x in surviving if x["method"] == winner["method"])
     if winner_p["metrics"].get("effective_n", 1.0) < 4 or \
        winner_p["metrics"].get("max_weight", 0.0) > 0.5:
-        challenger = _adversarial_challenger(surviving, ips["tickers"])
-        # Head-to-head: compare on risk-adj-return + diversification
+        challenger = _adversarial_challenger(ips)
+        # Concentration challenge: require a material effective-N improvement.
+        challenger_weights = np.array(list(challenger["weights"].values()))
         challenger_metrics = {
-            "effective_n": float(len(ips["tickers"])),
-            "max_weight": 1.0 / len(ips["tickers"]),
+            "effective_n": float(1.0 / np.sum(challenger_weights**2)),
+            "max_weight": float(challenger_weights.max()),
         }
         won = challenger_metrics["effective_n"] > winner_p["metrics"]["effective_n"] * 1.2
         adv = {
