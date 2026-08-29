@@ -1,0 +1,20 @@
+{
+  "name": "self-driving-portfolio-skill",
+  "version": "0.2.0",
+  "description": "Governed agentic Strategic Asset Allocation research with deterministic portfolio methods, fail-closed contracts, and verifiable provenance.",
+  "author": {
+    "name": "nutdnuy",
+    "url": "https://github.com/nutdnuy"
+  },
+  "homepage": "https://github.com/nutdnuy/self-driving-portfolio-skill",
+  "repository": "https://github.com/nutdnuy/self-driving-portfolio-skill",
+  "license": "MIT",
+  "keywords": [
+    "strategic-asset-allocation",
+    "portfolio-construction",
+    "investment-policy-statement",
+    "agentic-finance",
+    "claude-code",
+    "codex"
+  ]
+}

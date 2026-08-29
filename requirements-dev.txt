@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest>=9.0.3,<10.0
+pyyaml>=6.0,<7.0
+ruff>=0.12,<1.0

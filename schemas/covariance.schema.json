@@ -1,18 +1,48 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/nutdnuy/self-driving-portfolio-skill/schemas/covariance.schema.json",
   "title": "Covariance estimate",
   "type": "object",
-  "required": ["as_of", "method", "tickers", "covariance"],
+  "additionalProperties": false,
+  "required": [
+    "as_of",
+    "data_through",
+    "method",
+    "tickers",
+    "covariance",
+    "shrinkage_intensity",
+    "condition_number",
+    "lookback_years",
+    "min_eigenvalue",
+    "psd_repaired",
+    "n_observations",
+    "missing_fraction"
+  ],
   "properties": {
     "as_of": {"type": "string", "format": "date"},
+    "data_through": {"type": "string", "format": "date"},
     "method": {"type": "string", "enum": ["sample", "ewma", "ledoit_wolf"]},
-    "tickers": {"type": "array", "items": {"type": "string"}},
+    "tickers": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Z0-9][A-Z0-9.^=_-]{0,19}$"}
+    },
     "covariance": {
       "type": "array",
-      "items": {"type": "array", "items": {"type": "number"}}
+      "minItems": 2,
+      "items": {
+        "type": "array",
+        "minItems": 2,
+        "items": {"type": "number"}
+      }
     },
-    "shrinkage_intensity": {"type": "number"},
-    "condition_number": {"type": "number"},
-    "lookback_years": {"type": "number"}
+    "shrinkage_intensity": {"type": "number", "minimum": 0, "maximum": 1},
+    "condition_number": {"type": "number", "minimum": 1},
+    "lookback_years": {"type": "number", "exclusiveMinimum": 0},
+    "min_eigenvalue": {"type": "number"},
+    "psd_repaired": {"type": "boolean"},
+    "n_observations": {"type": "integer", "minimum": 2},
+    "missing_fraction": {"type": "number", "minimum": 0, "maximum": 1}
   }
 }

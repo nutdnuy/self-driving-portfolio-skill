@@ -9,9 +9,11 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "skills" / "portfolio-construction" / "scripts"))
+import methods  # noqa: E402
 from methods import METHODS  # noqa: E402
 from utils import is_feasible, project_to_box  # noqa: E402
 
@@ -85,3 +87,32 @@ def test_box_projection_respects_bounds():
     assert (proj >= data["min_w"] - 1e-9).all()
     assert (proj <= data["max_w"] + 1e-9).all()
     assert abs(proj.sum() - 1.0) < 1e-6
+
+
+def test_box_projection_is_exact_for_capped_concentration():
+    projected = project_to_box(
+        np.array([0.9, 0.05, 0.05]),
+        np.zeros(3),
+        np.array([0.5, 0.8, 0.8]),
+    )
+    assert np.allclose(projected, [0.5, 0.25, 0.25], atol=1e-8)
+
+
+def test_box_projection_rejects_infeasible_ips():
+    with pytest.raises(ValueError, match="infeasible"):
+        project_to_box(
+            np.array([0.5, 0.5]),
+            np.array([0.6, 0.6]),
+            np.array([0.8, 0.8]),
+        )
+
+
+def test_optimizer_failure_is_not_disguised_as_a_valid_proposal(monkeypatch):
+    class FailedResult:
+        success = False
+        message = "synthetic failure"
+        x = np.full(5, 0.2)
+
+    monkeypatch.setattr(methods, "minimize", lambda *args, **kwargs: FailedResult())
+    with pytest.raises(RuntimeError, match="optimizer failed"):
+        methods.min_variance(make_data())

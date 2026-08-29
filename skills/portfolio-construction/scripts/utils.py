@@ -1,78 +1,56 @@
 """Shared utilities for portfolio-construction methods."""
 from __future__ import annotations
 
-import re
+import sys
 from pathlib import Path
 
 import numpy as np
 
+REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO))
+from pipeline.ips import parse_ips  # noqa: E402, F401
 
-def parse_ips(ips_path: str | Path) -> dict:
-    """Tiny markdown parser that extracts the asset universe table from the
-    IPS template. Returns dict with keys: tickers, min_w, max_w."""
-    text = Path(ips_path).read_text()
-    rows = []
-    in_table = False
-    for line in text.splitlines():
-        line = line.strip()
-        if line.startswith("| Ticker") or line.startswith("|Ticker"):
-            in_table = True
-            continue
-        if in_table:
-            if not line.startswith("|"):
-                break
-            if re.match(r"^\|\s*-+\s*\|", line):
-                continue
-            cells = [c.strip() for c in line.strip("|").split("|")]
-            if len(cells) >= 4 and re.match(r"^[A-Z][A-Z0-9]+$", cells[0]):
-                try:
-                    minw = float(cells[2])
-                    maxw = float(cells[3])
-                except ValueError:
-                    continue
-                rows.append((cells[0], minw, maxw))
-    if not rows:
-        raise ValueError(f"No asset universe table found in {ips_path}")
-    tickers = [r[0] for r in rows]
-    min_w = np.array([r[1] for r in rows])
-    max_w = np.array([r[2] for r in rows])
-    return {"tickers": tickers, "min_w": min_w, "max_w": max_w}
+RISK_FREE_RATE = 0.04
 
 
 def project_to_box(w: np.ndarray, min_w: np.ndarray, max_w: np.ndarray,
                    max_iter: int = 200, tol: float = 1e-9) -> np.ndarray:
-    """Iterative clip-and-renormalise projection of `w` onto
-    {w : sum=1, min_w <= w <= max_w}. Returns clipped weights; if
-    not feasible (sum of min_w > 1 or sum of max_w < 1) returns the
-    closest clipped solution.
+    """Project exactly onto ``{x: sum(x)=1, min_w <= x <= max_w}``.
+
+    Solve the Euclidean projection with a monotone Lagrange-multiplier
+    bisection. Reject impossible IPS bounds instead of returning a misleading
+    almost-feasible vector.
     """
     w = np.array(w, dtype=float)
-    if w.sum() == 0:
-        w = np.ones_like(w) / len(w)
-    w = w / w.sum()
+    min_w = np.array(min_w, dtype=float)
+    max_w = np.array(max_w, dtype=float)
+    if w.ndim != 1 or min_w.shape != w.shape or max_w.shape != w.shape:
+        raise ValueError("w, min_w, and max_w must be one-dimensional arrays of equal length")
+    if not np.isfinite(w).all() or not np.isfinite(min_w).all() or not np.isfinite(max_w).all():
+        raise ValueError("Projection inputs must be finite")
+    if (min_w > max_w).any() or min_w.sum() > 1.0 + tol or max_w.sum() < 1.0 - tol:
+        raise ValueError("Cannot project onto infeasible IPS box constraints")
+
+    lower_lambda = float(np.min(w - max_w))
+    upper_lambda = float(np.max(w - min_w))
+    projected = np.clip(w, min_w, max_w)
     for _ in range(max_iter):
-        w = np.clip(w, min_w, max_w)
-        s = w.sum()
-        if abs(s - 1.0) < tol:
-            return w
-        # mass to add or remove
-        diff = 1.0 - s
-        # distribute among free assets (not at a bound in the right direction)
-        if diff > 0:
-            free = max_w - w
-            if free.sum() <= 0:
-                break
-            w = w + diff * free / free.sum()
+        lagrange = (lower_lambda + upper_lambda) / 2.0
+        projected = np.clip(w - lagrange, min_w, max_w)
+        total = float(projected.sum())
+        if abs(total - 1.0) <= tol:
+            break
+        if total > 1.0:
+            lower_lambda = lagrange
         else:
-            free = w - min_w
-            if free.sum() <= 0:
-                break
-            w = w + diff * free / free.sum()
-    return np.clip(w, min_w, max_w)
+            upper_lambda = lagrange
+    if abs(float(projected.sum()) - 1.0) > max(tol, 1e-8):
+        raise RuntimeError("Box projection failed to converge")
+    return projected
 
 
 def is_feasible(w: np.ndarray, min_w: np.ndarray, max_w: np.ndarray,
-                tol: float = 1e-4) -> bool:
+                tol: float = 1e-8) -> bool:
     return (
         abs(w.sum() - 1.0) < tol
         and (w >= min_w - tol).all()
@@ -81,7 +59,7 @@ def is_feasible(w: np.ndarray, min_w: np.ndarray, max_w: np.ndarray,
 
 
 def portfolio_metrics(w: np.ndarray, mu: np.ndarray, sigma: np.ndarray,
-                      cov: np.ndarray, rf: float = 0.04) -> dict:
+                      cov: np.ndarray, rf: float = RISK_FREE_RATE) -> dict:
     exp_ret = float(w @ mu)
     var = float(w @ cov @ w)
     vol = float(np.sqrt(max(var, 0.0)))
@@ -99,14 +77,24 @@ def portfolio_metrics(w: np.ndarray, mu: np.ndarray, sigma: np.ndarray,
 
 
 def align_inputs(cmas: dict, cov_obj: dict, ips: dict) -> dict:
-    """Align CMA, covariance, and IPS to a single ordered ticker list
-    (intersection)."""
+    """Align inputs in IPS order and reject any silent universe shrinkage."""
+    if cmas.get("as_of") != cov_obj.get("as_of"):
+        raise ValueError(
+            f"CMA/covariance as_of mismatch: {cmas.get('as_of')} != {cov_obj.get('as_of')}"
+        )
     cmas_by_t = {c["ticker"]: c for c in cmas["cmas"]}
     cov_tickers = cov_obj["tickers"]
     cov_idx = {t: i for i, t in enumerate(cov_tickers)}
 
     ips_tickers = ips["tickers"]
-    chosen = [t for t in ips_tickers if t in cmas_by_t and t in cov_idx]
+    if set(cmas_by_t) != set(ips_tickers) or set(cov_tickers) != set(ips_tickers):
+        raise ValueError(
+            "CMA and covariance universes must exactly match the IPS universe; "
+            f"IPS={ips_tickers}, CMA={list(cmas_by_t)}, covariance={cov_tickers}"
+        )
+    if len(cmas_by_t) != len(cmas["cmas"]) or len(cov_idx) != len(cov_tickers):
+        raise ValueError("CMA and covariance ticker lists must be unique")
+    chosen = list(ips_tickers)
     n = len(chosen)
     mu = np.array([cmas_by_t[t]["expected_return"] for t in chosen])
     sigma = np.array([cmas_by_t[t]["volatility"] for t in chosen])
@@ -114,6 +102,8 @@ def align_inputs(cmas: dict, cov_obj: dict, ips: dict) -> dict:
 
     # Pull the sub-matrix in `chosen` order
     full = np.array(cov_obj["covariance"])
+    if full.shape != (len(cov_tickers), len(cov_tickers)):
+        raise ValueError("Covariance dimensions do not match its ticker list")
     idx = [cov_idx[t] for t in chosen]
     cov = full[np.ix_(idx, idx)]
 
@@ -122,7 +112,7 @@ def align_inputs(cmas: dict, cov_obj: dict, ips: dict) -> dict:
     min_w = np.array([ips["min_w"][ips_idx[t]] for t in chosen])
     max_w = np.array([ips["max_w"][ips_idx[t]] for t in chosen])
 
-    return {
+    aligned = {
         "tickers": chosen,
         "n": n,
         "mu": mu,
@@ -132,3 +122,7 @@ def align_inputs(cmas: dict, cov_obj: dict, ips: dict) -> dict:
         "min_w": min_w,
         "max_w": max_w,
     }
+    for name in ("mu", "sigma", "confidence", "cov", "min_w", "max_w"):
+        if not np.isfinite(aligned[name]).all():
+            raise ValueError(f"Aligned input {name} contains NaN or Infinity")
+    return aligned

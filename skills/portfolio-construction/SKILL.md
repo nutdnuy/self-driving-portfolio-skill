@@ -1,6 +1,6 @@
 ---
 name: portfolio-construction
-description: Generate one or many portfolio proposals from CMAs and a covariance matrix using ten construction methods (equal-weight, inverse-vol, min-variance, max-Sharpe, risk parity, HRP, max diversification, Black-Litterman, MVO with constraints, Total Portfolio Allocation). Use when an upstream agent needs candidate portfolios for the strategy review stage.
+description: This skill should be used when the user asks to "compare portfolio construction methods", "run risk parity", "build a minimum-variance portfolio", or generate IPS-constrained SAA candidates.
 ---
 
 # portfolio-construction
@@ -26,10 +26,10 @@ respects IPS hard constraints (long-only, sum-to-one, per-ticker box).
 ## Constraint projection
 
 After every optimiser, weights are projected onto the IPS feasible set
-via a small QP-style iterative clip-and-renormalise loop
-(`utils.project_to_box`). If the projection cannot reach feasibility in
-50 iterations (e.g. the IPS box is internally inconsistent), the
-proposal is flagged `feasible=false` and surfaced to the reviewer.
+with the exact Euclidean bounded-simplex projection
+(`utils.project_to_box`). Solve the Lagrange multiplier by monotone bisection.
+Reject the IPS before optimization when `sum(min_w) > 1` or
+`sum(max_w) < 1`; never return an almost-feasible vector.
 
 ## CLI
 
@@ -40,3 +40,5 @@ python skills/portfolio-construction/scripts/run_all.py \
        --ips  ips/ips_template.md \
        --out  outputs/demo01/pc_proposals.json
 ```
+
+Run through `pipeline/orchestrator.py` for schema gating and governed output.

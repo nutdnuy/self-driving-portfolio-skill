@@ -1,0 +1,34 @@
+{
+  "name": "self-driving-portfolio-skill",
+  "version": "0.2.0",
+  "description": "Governed agentic Strategic Asset Allocation research with deterministic portfolio methods, fail-closed contracts, and verifiable provenance.",
+  "author": {
+    "name": "nutdnuy",
+    "url": "https://github.com/nutdnuy"
+  },
+  "homepage": "https://github.com/nutdnuy/self-driving-portfolio-skill",
+  "repository": "https://github.com/nutdnuy/self-driving-portfolio-skill",
+  "license": "MIT",
+  "keywords": [
+    "strategic-asset-allocation",
+    "portfolio-construction",
+    "investment-policy-statement",
+    "agentic-finance"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Self-Driving Portfolio",
+    "shortDescription": "Build and verify an IPS-governed policy portfolio.",
+    "longDescription": "Run a six-stage Strategic Asset Allocation research pipeline with deterministic portfolio construction, strict artifact contracts, point-in-time cutoffs, human escalation, and tamper-evident provenance. No brokerage or order placement is included.",
+    "developerName": "nutdnuy",
+    "category": "Data & Analytics",
+    "capabilities": ["Read", "Write", "Interactive"],
+    "websiteURL": "https://github.com/nutdnuy/self-driving-portfolio-skill",
+    "defaultPrompt": [
+      "Build an IPS-governed strategic asset allocation.",
+      "Compare portfolio construction methods for this mandate.",
+      "Verify this self-driving portfolio run."
+    ],
+    "brandColor": "#0A7B6C"
+  }
+}
