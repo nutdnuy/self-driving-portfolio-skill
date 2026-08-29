@@ -1,63 +1,104 @@
+<div align="center">
+
 # Self-Driving Portfolio
 
-Claude Code and Codex plugin for governed Strategic Asset Allocation (SAA)
-research. It implements the six-stage agentic workflow described by
-[Ang, Azimbayev, and Kim (2026)](https://arxiv.org/abs/2604.02279), while
-keeping arithmetic and control decisions in deterministic Python.
+**Governed Strategic Asset Allocation research for Claude Code and Codex.**
+
+From an Investment Policy Statement to a reproducible policy portfolio, with
+deterministic mathematics, fail-closed controls, and evidence that can be
+verified independently from disk.
+
+[![CI](https://github.com/nutdnuy/self-driving-portfolio-skill/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nutdnuy/self-driving-portfolio-skill/actions/workflows/ci.yml)
+
+`v0.2.0` · `Python 3.10–3.13` · `MIT` · `research only`
+
+[Quick start](#quick-start) · [Architecture](#architecture) ·
+[Verify a run](#verify-every-run) · [Governance](docs/ARCHITECTURE.md) ·
+[Comparison](docs/COMPARISON.md)
+
+</div>
+
+> [!IMPORTANT]
+> This repository produces research artifacts, not trades. It has no brokerage
+> integration, does not place orders, and does not promise performance. Human
+> portfolio-manager review remains mandatory.
+
+## Why this project exists
+
+Agentic portfolio research is useful only when its mandate, data, arithmetic,
+state transitions, and evidence can be checked without trusting the agent's
+narrative. Self-Driving Portfolio turns the architecture proposed by
+[Ang, Azimbayev, and Kim (2026)](https://arxiv.org/abs/2604.02279) into an
+installable Claude Code and Codex plugin backed by a deterministic Python
+engine.
+
+Give it an IPS and an as-of date. The governed pipeline freezes the inputs,
+builds capital-market assumptions and a PSD covariance matrix, compares ten
+portfolio methods, peer-reviews the candidates, forms a CIO ensemble, and
+writes a board memo plus a tamper-evident audit trail.
+
+| Requirement | Repository contract |
+| --- | --- |
+| Mandate fidelity | Parse the IPS into computable bounds and snapshot the exact source used for the run. |
+| Point-in-time discipline | Propagate one as-of date and freeze the consumed macro and price frames. |
+| Numerical control | Keep optimization, projection, covariance repair, scoring, and metrics in deterministic Python. |
+| Safe orchestration | Allow only the declared six-stage order and stop on the first invalid transition or artifact. |
+| Verifiable evidence | Recompute schemas, hashes, stage order, lineage, IPS bounds, and portfolio metrics from disk. |
+| Human accountability | Produce an explicit escalation decision, dissenting view, and review-ready board memo; never execute trades. |
+
+## Architecture
+
+### Executable core in this repository
 
 ```text
-IPS snapshot -> macro regime -> CMAs -> PSD covariance
-             -> 10 portfolio methods -> Borda review -> CIO ensemble
-             -> board memo + manifest + hash-chained audit log
+IPS snapshot
+  -> macro regime
+  -> capital-market assumptions
+  -> PSD covariance
+  -> 10 portfolio proposals
+  -> peer review + tie-aware Borda ranking
+  -> CIO ensemble + dissent + escalation
+  -> board memo + manifest + hash-chained audit log
 ```
 
-The repository is intentionally research-only. It has no brokerage
-integration, order placement, or claim of guaranteed performance.
+Every stage must pass a strict JSON Schema gate and cross-artifact semantic
+checks before an atomic commit. A failed run records the failure, preserves the
+valid evidence already written, and blocks every downstream stage.
 
-## What v0.2 Adds
+### Detailed paper architecture
 
-- **Executable contracts:** enforce strict JSON Schemas and semantic invariants
-  between all six stages.
-- **Fail-closed finite-state orchestration:** prevent skipped, repeated, or
-  out-of-order stage commits.
-- **Point-in-time controls:** propagate one as-of date through macro and market
-  data; use true FRED vintage retrieval when `FRED_API_KEY` is available.
-- **No silent universe shrinkage:** stop when any IPS asset lacks required data.
-- **Numerical safety:** use exact Euclidean box projection, reject infeasible
-  IPS bounds, and repair covariance eigenvalues with explicit diagnostics.
-- **Tamper evidence:** snapshot the IPS and raw macro/price inputs, freeze schema
-  contracts, hash every artifact, chain audit events, and ship a standalone
-  verification command.
-- **Atomic outputs:** expose only complete artifact writes and preserve failed
-  runs for diagnosis.
-- **Agent-native packaging:** install as a Claude Code or Codex plugin with a
-  canonical meta-skill, six stage skills, six least-privilege specialist
-  agents, and four workflow commands.
-- **Automated quality gates:** run network-free tests and lint across Python
-  3.10-3.13 in CI.
+The bilingual diagram below maps the paper's broader institutional design,
+including its conceptual specialist teams, feedback loops, output contracts,
+and human-control model. Select the image to open the full-resolution SVG.
 
-See [the evidence-based comparison](docs/COMPARISON.md) and
-[governance architecture](docs/ARCHITECTURE.md).
+<p align="center">
+  <a href="docs/assets/self-driving-portfolio-detailed.svg">
+    <img src="docs/assets/self-driving-portfolio-detailed.svg" width="100%" alt="Detailed bilingual architecture of the Self-Driving Portfolio agentic strategic asset allocation pipeline, from IPS governance through macro regime, capital-market assumptions, covariance, portfolio construction, peer review, CIO synthesis, and self-learning feedback." />
+  </a>
+</p>
 
-## Install in Codex or ChatGPT
+> [!NOTE]
+> **Diagram scope:** the SVG explains the paper's full conceptual architecture
+> and includes illustrative March 2026 results. Repository v0.2 deliberately
+> implements the governed six-stage core with six specialist plugin agents. It
+> does not implement a self-modifying meta-agent, the paper's full ~50-role
+> organization, or live trading.
 
-A workspace administrator can import this GitHub repository from **Workspace
-settings > Plugins > Marketplaces**. The importer discovers
-`.agents/plugins/marketplace.json`; after import, make the plugin available and
-install it from the Plugins directory. See OpenAI's
-[GitHub marketplace import guide](https://help.openai.com/en/articles/20001504).
+## What ships
 
-## Install in Claude Code
+| Surface | Included |
+| --- | --- |
+| Governed engine | Six-stage finite-state orchestrator with atomic writes and immutable run IDs |
+| Portfolio engine | Ten deterministic construction methods plus seven CIO ensemble methods |
+| Contracts | Six strict JSON Schemas plus semantic and cross-artifact invariants |
+| Evidence | IPS, macro, and price snapshots; frozen schemas; manifest; artifact hashes; chained audit events |
+| Independent verification | Standalone CLI that replays the run contract without relying on agent prose |
+| Agent packaging | Claude Code, Codex, and ChatGPT-compatible manifests; seven skills; six specialist agents; four commands |
+| Quality gates | Network-free tests, Ruff, compilation checks, and CI across Python 3.10–3.13 |
 
-```text
-/plugin marketplace add nutdnuy/self-driving-portfolio-skill
-/plugin install self-driving-portfolio-skill@self-driving-portfolio-skill
-```
+## Quick start
 
-These commands follow the Claude Code
-[marketplace workflow](https://code.claude.com/docs/en/discover-plugins).
-
-## Local Setup
+### 1. Install locally
 
 ```bash
 git clone https://github.com/nutdnuy/self-driving-portfolio-skill.git
@@ -68,17 +109,22 @@ python -m pip install -e ".[dev]"
 pytest -q
 ```
 
-No key is required for the public FRED CSV fallback. Set `FRED_API_KEY` when a
-historical FRED vintage is required; the fallback is latest-revised history
-with a correct observation-date cutoff, not a vintage-clean backtest.
+### 2. Define the mandate
 
-## Run
+Copy the template and edit the IPS rather than changing controls in code:
 
-Edit `ips/ips_template.md`, then create a unique run:
+```bash
+cp ips/ips_template.md ips/my_policy.md
+```
+
+At minimum, review the as-of date, investment universe, asset bounds, target
+volatility, and drawdown limit.
+
+### 3. Run the governed pipeline
 
 ```bash
 python pipeline/orchestrator.py \
-  --ips ips/ips_template.md \
+  --ips ips/my_policy.md \
   --run-id policy-2026-05-08 \
   --as-of 2026-05-08 \
   --lookback-years 10 \
@@ -86,16 +132,24 @@ python pipeline/orchestrator.py \
   --top-k 5
 ```
 
-Omit `--as-of` to use the IPS `As-of date`. Omit `--run-id` to generate a UTC
-timestamped ID. Existing run directories are never overwritten.
+Omit `--as-of` to use the IPS date. Omit `--run-id` to create a unique UTC
+timestamped ID. An existing run directory is never overwritten.
 
-## Verify Before Use
+Fresh runs retrieve market data from yfinance and macro data from FRED. No key
+is required for the public FRED CSV fallback. Set `FRED_API_KEY` when a true
+historical FRED vintage is required; without it, the fallback uses
+latest-revised history with an observation-date cutoff and must not be treated
+as a vintage-clean backtest.
+
+## Verify every run
+
+Do not interpret a recommendation until the standalone verifier passes:
 
 ```bash
 python pipeline/verify.py outputs/policy-2026-05-08
 ```
 
-A valid result reports:
+A complete, internally consistent run reports:
 
 ```json
 {
@@ -110,58 +164,78 @@ A valid result reports:
 }
 ```
 
-Treat any verification failure or incomplete status as unusable research.
+Verification covers input and schema snapshots, manifest hashes, audit-chain
+continuity, legal state order, artifact lineage, ticker order, IPS bounds,
+proposal metrics, ensemble selection, dissent, and escalation. Any failure or
+incomplete status makes the research unusable until reviewed.
 
-## Governed Outputs
+## Governed run contents
 
-Every run is self-contained:
+Each run is a self-contained evidence package:
 
 ```text
 outputs/<run-id>/
 ├── inputs/
-│   ├── ips.md                 # immutable IPS snapshot
-│   ├── macro.csv              # exact macro frame consumed by the classifier
-│   └── prices.csv             # exact price frame shared by CMA/covariance
+│   ├── ips.md                 # immutable mandate snapshot
+│   ├── macro.csv              # exact frame consumed by regime analysis
+│   └── prices.csv             # one shared frame for CMA and covariance
 ├── contracts/                 # immutable schema snapshots
-├── regime.json               # regime scores + vintage policy
-├── cmas.json                 # per-asset assumptions
-├── covariance.json           # PSD risk matrix + diagnostics
-├── pc_proposals.json         # 10 deterministic proposals
-├── peer_review.json          # filters + Borda ranking
-├── final_portfolio.json      # ensemble recommendation + escalation
-├── board_memo.md             # human-review memo
-├── run_manifest.json         # parameters + source/schema/artifact hashes
-└── audit.jsonl               # hash-chained state transitions
+├── regime.json                # regime scores and vintage policy
+├── cmas.json                  # per-asset assumptions and lineage
+├── covariance.json            # PSD risk matrix and repair diagnostics
+├── pc_proposals.json          # ten deterministic proposals
+├── peer_review.json           # filters, metrics, and Borda ranking
+├── final_portfolio.json       # ensemble, dissent, and escalation
+├── board_memo.md              # human-review artifact
+├── run_manifest.json          # parameters, versions, and hashes
+└── audit.jsonl                # hash-chained state transitions
 ```
 
-The hash chain is tamper-evident within the run directory; it is not an
-external signature. Add immutable storage or independent signing for legal
-non-repudiation requirements.
+The chain is tamper-evident inside the run directory; it is not a digital
+signature. Regulated evidence retention still requires independent signing or
+externally anchored immutable storage.
 
-## Portfolio Methods
+## Portfolio construction and review
 
-The deterministic engine compares:
+| Family | Methods |
+| --- | --- |
+| Simple and risk-based | Equal Weight, Inverse Volatility, Risk Parity, Hierarchical Risk Parity |
+| Optimized | Minimum Variance, Maximum Sharpe, Maximum Diversification, Constrained Mean-Variance |
+| Equilibrium and policy | Black-Litterman, Total Portfolio Allocation |
 
-1. Equal Weight
-2. Inverse Volatility
-3. Minimum Variance
-4. Maximum Sharpe
-5. Risk Parity
-6. Hierarchical Risk Parity
-7. Maximum Diversification
-8. Black-Litterman
-9. Constrained Mean-Variance
-10. Total Portfolio Allocation
+The peer-review stage rejects IPS and risk failures, recomputes metrics from
+the frozen CMA and covariance artifacts, and ranks eligible proposals on
+risk-adjusted return, diversification, and robustness using tie-aware Borda
+points. The CIO stage evaluates seven ensemble rules, records the selected rule
+and a dissenting view, and escalates when the governed policy requires human
+attention.
 
-Peer review drops IPS/risk failures, scores risk-adjusted return,
-diversification, and robustness, then aggregates ranks with Borda points. The
-CIO stage evaluates seven ensemble methods and retains a dissenting view.
+## Install as an agent plugin
 
-## Plugin Skill and Commands
+### Codex or ChatGPT
 
-The canonical skill is `skills/self-driving-portfolio/SKILL.md`.
+A workspace administrator can import this GitHub repository from **Workspace
+settings → Plugins → Marketplaces**. The importer discovers
+`.agents/plugins/marketplace.json`; after import, make the plugin available and
+install it from the Plugins directory. See OpenAI's
+[GitHub marketplace import guide](https://help.openai.com/en/articles/20001504).
 
-Example prompts:
+### Claude Code
+
+```text
+/plugin marketplace add nutdnuy/self-driving-portfolio-skill
+/plugin install self-driving-portfolio-skill@self-driving-portfolio-skill
+```
+
+The repository exposes one canonical orchestration skill, six stage skills,
+and these workflow commands:
+
+- `/self-driving-setup`
+- `/self-driving-run`
+- `/self-driving-verify`
+- `/self-driving-explain-limits`
+
+Example requests:
 
 ```text
 Build an IPS-governed strategic asset allocation from this mandate.
@@ -169,12 +243,17 @@ Compare portfolio construction methods as of 2026-05-08.
 Verify this self-driving portfolio run and explain every escalation.
 ```
 
-Workflow commands:
+## Safety boundary and limitations
 
-- `/self-driving-setup`
-- `/self-driving-run`
-- `/self-driving-verify`
-- `/self-driving-explain-limits`
+This prototype does not fully encode liabilities, taxes, liquidity, turnover,
+market impact, currency hedging, derivatives, legal constraints, operational
+risk, or execution. Historical means are noisy, correlations change, regime
+tilts are heuristic, and yfinance is not an institutional market-data system.
+
+Keep credentials out of IPS files and run artifacts. Treat downloaded data as
+untrusted, keep order APIs outside the project, and report vulnerabilities
+through a private GitHub security advisory. See [SECURITY.md](SECURITY.md) and
+the detailed [interpretation limits](skills/self-driving-portfolio/references/limitations.md).
 
 ## Development
 
@@ -184,33 +263,22 @@ pytest -q
 python -m compileall -q pipeline skills examples tests
 ```
 
-The test suite does not require FRED or yfinance access. Network calls remain
-outside acceptance tests so governance failures are reproducible.
+Acceptance tests are network-free so governance and numerical failures remain
+reproducible. CI runs the same gates on Python 3.10, 3.11, 3.12, and 3.13.
 
-## Scope and Limitations
+## Research foundation and prior art
 
-This prototype does not fully encode liabilities, taxes, liquidity, turnover,
-market impact, currency hedging, derivatives, legal constraints, operational
-risk, or trade execution. Historical means are noisy; correlations change;
-regime tilts are heuristic; and yfinance is not an institutional market-data
-system. Read
-[`references/limitations.md`](skills/self-driving-portfolio/references/limitations.md)
-before interpreting a result.
+This project is an independent implementation of the architecture described by
+[Ang, Azimbayev, and Kim (2026)](https://arxiv.org/abs/2604.02279). The
+MIT-licensed
+[chirindaopensource reference implementation](https://github.com/chirindaopensource/agentic_architecture_for_institutional_asset_management)
+is broader and method-rich; this repository focuses on plugin installation,
+modular agent surfaces, fail-closed execution, immutable run contracts,
+standalone verification, and automated acceptance gates.
 
-Human portfolio-manager review remains mandatory. Generated weights are a
-research starting point, not investment advice or implementation approval.
-
-## Related Implementation
-
-[chirindaopensource/agentic_architecture_for_institutional_asset_management](https://github.com/chirindaopensource/agentic_architecture_for_institutional_asset_management)
-is an MIT-licensed independent implementation of the same paper and documents
-important ideas including deterministic arithmetic, schema gating, state
-control, covariance repair, and cryptographic provenance. This repository uses
-an independently implemented, modular plugin architecture and adds a
-standalone verifier, immutable run contract, agent discovery manifests,
-network-free acceptance tests, and CI. No source file from that implementation
-is vendored here.
+See the date-stamped [evidence-based comparison](docs/COMPARISON.md). No source
+file from the reference implementation is vendored here.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[MIT](LICENSE) © nutdnuy
